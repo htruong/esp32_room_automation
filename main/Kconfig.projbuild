@@ -1,0 +1,43 @@
+menu "ESP32 Room Automation Project"
+
+config WIFI_SSID
+    string "WiFi SSID"
+    default "myssid"
+    help
+        SSID (network name) for the example to connect to.
+
+config WIFI_PASSWORD
+    string "WiFi Password"
+    default "mypassword"
+    help
+        WiFi password (WPA or WPA2) for the example to use.
+
+config BROKER_URL
+    string "Broker URL"
+    default "mqtt://iot.eclipse.org"
+    help
+        URL of the broker to connect to
+
+config BROKER_URL_FROM_STDIN
+	bool
+	default y if BROKER_URL = "FROM_STDIN"
+
+config MQTT_TOPIC_PREFIX
+    string "MQTT Topic prefix"
+    default "/myname/myroom"
+    help
+        Prefix for your MQTT topic
+
+config BLINK_GPIO
+    int "Blink GPIO number"
+        range 0 34
+        default 5
+        help
+                GPIO number (IOxx) to blink on and off.
+
+                Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
+
+                GPIOs 35-39 are input-only so cannot be used as outputs.
+
+
+endmenu
