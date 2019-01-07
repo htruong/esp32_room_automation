@@ -24,20 +24,25 @@ config BROKER_URL_FROM_STDIN
 
 config MQTT_TOPIC_PREFIX
     string "MQTT Topic prefix"
-    default "/myname/myroom"
+    default "myname/myroom"
     help
         Prefix for your MQTT topic
 
-config BLINK_GPIO
-    int "Blink GPIO number"
+config RELAY_GPIO
+    int "Relay switch GPIO number"
         range 0 34
         default 5
         help
-                GPIO number (IOxx) to blink on and off.
-
+                GPIO number (IOxx) to switch on and off.
                 Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used to blink.
-
                 GPIOs 35-39 are input-only so cannot be used as outputs.
+
+config DHT_GPIO
+    int "DHT GPIO number"
+        range 0 34
+        default 2
+        help
+               GPIO number (IOxx) for the DHT sensor.
 
 
 endmenu

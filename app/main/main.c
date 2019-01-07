@@ -22,12 +22,60 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 
+#include <dht.h>
+
 static const char *TAG = "MQTT_BEDROOMAUTOMATION";
 
 static EventGroupHandle_t wifi_event_group;
 const static int CONNECTED_BIT = BIT0;
 
-#define BLINK_GPIO CONFIG_BLINK_GPIO
+#define RELAY_GPIO CONFIG_RELAY_GPIO
+
+//int dht_sensor_last_pull = 0;
+int16_t dht_sensor_last_temp = 0;
+int16_t dht_sensor_last_humid = 0;
+
+static const dht_sensor_type_t sensor_type = DHT_TYPE_DHT22;
+static const gpio_num_t dht_gpio = CONFIG_DHT_GPIO;
+
+esp_mqtt_client_handle_t client = NULL;
+int8_t client_ready = 0;
+
+void dht_update_sensor(void *pvParameters)
+{
+    int16_t temperature = 0;
+    int16_t humidity = 0;
+
+    // DHT sensors that come mounted on a PCB generally have
+    // pull-up resistors on the data pin.  It is recommended
+    // to provide an external pull-up resistor otherwise...
+
+    gpio_set_pull_mode(dht_gpio, GPIO_PULLUP_ONLY);
+
+    while (1)
+    {
+        if (dht_read_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK)
+            printf("Updating Humidity: %d%% Temp: %dC\n", humidity / 10, temperature / 10);
+	    dht_sensor_last_temp = temperature;
+	    dht_sensor_last_humid = humidity;
+	    if (client_ready) {
+		    int msg_id;
+		    char buf[10];
+
+		    sprintf(buf, "%d", temperature/10);
+		    msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getTemp", buf, 0, 1, 1);
+		    ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+
+		    sprintf(buf, "%d", humidity/10);
+		    msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getHumid", buf, 0, 1, 1);
+		    ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+	    }
+        else
+            printf("Could not read data from sensor\n");
+
+        vTaskDelay(60000 / portTICK_PERIOD_MS);
+    }
+}
 
 
 static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
@@ -39,7 +87,6 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
             msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getOn", "0", 0, 1, 1);
-
             ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
             msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getOnline", "1", 0, 1, 1);
@@ -47,8 +94,11 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 
             msg_id = esp_mqtt_client_subscribe(client, CONFIG_MQTT_TOPIC_PREFIX "/setOn", 0);
             ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+
+	    client_ready = 1;
             break;
         case MQTT_EVENT_DISCONNECTED:
+	    client_ready = 0;
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
             break;
 
@@ -73,7 +123,7 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 		if (strncmp(event->data, "1", 1) == 0) {
 		    desired_state = 1;
 		}
-		gpio_set_level(BLINK_GPIO, desired_state);
+		gpio_set_level(RELAY_GPIO, desired_state);
 		msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getOn", desired_state==1?"1":"0", 0, 1, 1);
                 ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 	    }
@@ -160,16 +210,16 @@ static void mqtt_app_start(void)
     }
 #endif /* CONFIG_BROKER_URL_FROM_STDIN */
 
-    esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
+    client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_start(client);
 }
 
 
 static void configure_gpios()
 {
-    gpio_pad_select_gpio(BLINK_GPIO);
-    gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
-    gpio_set_level(BLINK_GPIO, 0);
+    gpio_pad_select_gpio(RELAY_GPIO);
+    gpio_set_direction(RELAY_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(RELAY_GPIO, 0);
 }
 
 void app_main()
@@ -189,5 +239,6 @@ void app_main()
 
     nvs_flash_init();
     wifi_init();
+    xTaskCreate(dht_update_sensor, "dht_update_sensor", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
     mqtt_app_start();
 }
