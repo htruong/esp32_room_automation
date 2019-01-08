@@ -54,24 +54,25 @@ void dht_update_sensor(void *pvParameters)
 
     while (1)
     {
-        if (dht_read_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK)
+        if (dht_read_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK) {
             printf("Updating Humidity: %d%% Temp: %dC\n", humidity / 10, temperature / 10);
-	    dht_sensor_last_temp = temperature;
-	    dht_sensor_last_humid = humidity;
-	    if (client_ready) {
-		    int msg_id;
-		    char buf[10];
+        dht_sensor_last_temp = temperature;
+        dht_sensor_last_humid = humidity;
+        if (client_ready) {
+            int msg_id;
+            char buf[10];
 
-		    sprintf(buf, "%d", temperature/10);
-		    msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getTemp", buf, 0, 1, 1);
-		    ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+            sprintf(buf, "%d", temperature/10);
+            msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getTemp", buf, 0, 1, 1);
+            ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
-		    sprintf(buf, "%d", humidity/10);
-		    msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getHumid", buf, 0, 1, 1);
-		    ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
-	    }
-        else
+            sprintf(buf, "%d", humidity/10);
+            msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getHumid", buf, 0, 1, 1);
+            ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+            }
+        } else {
             printf("Could not read data from sensor\n");
+        }
 
         vTaskDelay(60000 / portTICK_PERIOD_MS);
     }
@@ -95,10 +96,10 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
             msg_id = esp_mqtt_client_subscribe(client, CONFIG_MQTT_TOPIC_PREFIX "/setOn", 0);
             ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
 
-	    client_ready = 1;
+        client_ready = 1;
             break;
         case MQTT_EVENT_DISCONNECTED:
-	    client_ready = 0;
+        client_ready = 0;
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
             break;
 
@@ -114,19 +115,19 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
         case MQTT_EVENT_DATA:
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
 
-	    int desired_state = 0;
+            int desired_state = 0;
 
             printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
             printf("DATA=%.*s\r\n", event->data_len, event->data);
 
-	    if (strncmp(event->topic, CONFIG_MQTT_TOPIC_PREFIX "/setOn", event->topic_len) == 0) {
-		if (strncmp(event->data, "1", 1) == 0) {
-		    desired_state = 1;
-		}
-		gpio_set_level(RELAY_GPIO, desired_state);
-		msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getOn", desired_state==1?"1":"0", 0, 1, 1);
+            if (strncmp(event->topic, CONFIG_MQTT_TOPIC_PREFIX "/setOn", event->topic_len) == 0) {
+                if (strncmp(event->data, "1", 1) == 0) {
+                    desired_state = 1;
+                }
+            gpio_set_level(RELAY_GPIO, desired_state);
+            msg_id = esp_mqtt_client_publish(client, CONFIG_MQTT_TOPIC_PREFIX "/getOn", desired_state==1?"1":"0", 0, 1, 1);
                 ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
-	    }
+            }
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
